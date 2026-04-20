@@ -1,104 +1,178 @@
-import { useState } from 'react'
-import Editor from '@monaco-editor/react'
-import { Button } from '@/components/ui/button'
-import { Card } from '@/components/ui/card'
-import { Folder, File, Play } from 'lucide-react'
+import { useState } from 'react';
+import { Button } from '@/components/ui/button';
+import { Play, Rocket } from 'lucide-react';
+import { testBackend } from './utils/api.js';
+
+import FileTree from './components/FileTree';
+import EditorTabs from './components/EditorTabs';
+import MonacoEditor from './components/MonacoEditor';
 
 const initialFiles = {
-  'index.js': { content: '// Welcome to IntentIDE\nconsole.log("Hello from IntentIDE!");', language: 'javascript' },
-  'App.jsx': { content: 'export default function App() {\n  return <h1>Hello</h1>\n}', language: 'javascript' },
-  'utils.js': { content: 'export const sum = (a, b) => a + b;', language: 'javascript' }
-}
+  'index.js': {
+    content: '// Welcome to IntentIDE\nconsole.log("Hello from IntentIDE!");',
+    language: 'javascript'
+  },
+  'App.jsx': {
+    content: 'export default function App() {\n  return <h1>Hello from IntentIDE</h1>;\n}',
+    language: 'javascript'
+  },
+  'utils.js': {
+    content: 'export const add = (a, b) => a + b;\n\nexport const multiply = (a, b) => a * b;',
+    language: 'javascript'
+  }
+};
 
 export default function App() {
-  const [files] = useState(initialFiles)
-  const [activeFile, setActiveFile] = useState('index.js')
+  const [files, setFiles] = useState(initialFiles);
+  const [activeFile, setActiveFile] = useState('index.js');
+  const [consoleOutput, setConsoleOutput] = useState([]);
+  const [isConsoleOpen, setIsConsoleOpen] = useState(false);
 
-  const fileList = Object.keys(files)
+  const handleFileClick = (filename) => setActiveFile(filename);
+  const handleTabClick = (filename) => setActiveFile(filename);
+
+  const handleEditorChange = (value) => {
+    if (value !== undefined) {
+      setFiles(prev => ({
+        ...prev,
+        [activeFile]: {
+          ...prev[activeFile],
+          content: value
+        }
+      }));
+    }
+  };
+
+  // ================== RUN BUTTON ==================
+  const handleRun = () => {
+    const currentCode = files[activeFile]?.content || '';
+    setConsoleOutput([]);
+    
+    try {
+      const oldLog = console.log;
+      const logs = [];
+
+      console.log = (...args) => {
+        logs.push(args.join(' '));
+        oldLog(...args);
+      };
+
+      // eslint-disable-next-line no-eval
+      eval(currentCode);
+
+      setConsoleOutput(logs.length > 0 ? logs : ['Code executed successfully (no console output)']);
+      setIsConsoleOpen(true);
+    } catch (error) {
+      setConsoleOutput([`Error: ${error.message}`]);
+      setIsConsoleOpen(true);
+    } finally {
+      console.log = oldLog;
+    }
+  };
+
+  // ================== INTENT MODE (Backend Test) ==================
+  const handleIntentMode = async () => {
+    alert("🔄 Testing connection with Backend...");
+
+    try {
+      const result = await testBackend();
+      console.log("✅ Backend Response:", result);
+      alert(`✅ Backend says: ${result.message}`);
+    } catch (error) {
+      console.error("❌ Backend connection failed:", error);
+      alert("❌ Backend is not running!\n\nMake sure you started the backend with:\ncd backend && node index.js");
+    }
+  };
 
   return (
-    <div className="h-screen flex bg-[#0A0A0A] text-white">
-      {/* Left Sidebar - File Tree */}
-      <div className="w-72 border-r border-[#1F1F1F] bg-[#111111] flex flex-col">
-        <div className="p-4 border-b border-[#1F1F1F] flex items-center gap-2">
-          <span className="font-bold text-xl tracking-tight">IntentIDE</span>
-        </div>
-        
-        <div className="p-3">
-          <div className="text-xs uppercase tracking-widest text-gray-400 mb-2 px-2">Files</div>
-          {fileList.map(file => (
-            <button
-              key={file}
-              onClick={() => setActiveFile(file)}
-              className={`w-full flex items-center gap-2 px-3 py-2 text-left hover:bg-[#1F1F1F] rounded-md ${
-                activeFile === file ? 'bg-[#1F1F1F]' : ''
-              }`}
-            >
-              <File className="w-4 h-4" />
-              <span className="text-sm">{file}</span>
-            </button>
-          ))}
-        </div>
+    <div className="h-screen flex flex-col bg-[#0A0A0A] text-white overflow-hidden">
+      {/* Top Bar */}
+      <div className="h-12 border-b border-[#1F1F1F] bg-[#111111] flex items-center px-4 justify-between">
+        <div className="font-bold text-xl tracking-tight">IntentIDE</div>
 
-        {/* Your future AI buttons will go here */}
-        <div className="mt-auto p-4 border-t border-[#1F1F1F]">
-          <Button className="w-full bg-indigo-600 hover:bg-indigo-500" size="lg">
-            🚀 Intent Mode
+        <div className="flex items-center gap-3">
+          <Button 
+            onClick={handleRun}
+            variant="outline" 
+            size="sm" 
+            className="flex items-center gap-2"
+          >
+            <Play className="w-4 h-4" />
+            Run
+          </Button>
+          
+          <Button 
+            onClick={handleIntentMode}
+            size="sm" 
+            className="bg-violet-600 hover:bg-violet-500 flex items-center gap-2"
+          >
+            <Rocket className="w-4 h-4" />
+            Intent Mode
           </Button>
         </div>
       </div>
 
-      {/* Main Editor */}
-      <div className="flex-1 flex flex-col">
-        {/* Top bar */}
-        <div className="h-12 border-b border-[#1F1F1F] bg-[#111111] flex items-center px-4 gap-2">
-          <div className="flex-1 flex items-center gap-2">
-            {fileList.map(file => (
-              <div
-                key={file}
-                onClick={() => setActiveFile(file)}
-                className={`px-4 py-1 text-sm cursor-pointer border-b-2 ${
-                  activeFile === file 
-                    ? 'border-white text-white' 
-                    : 'border-transparent text-gray-400 hover:text-gray-200'
-                }`}
-              >
-                {file}
-              </div>
-            ))}
-          </div>
-          <Button variant="outline" size="sm">
-            <Play className="w-4 h-4 mr-2" /> Run
-          </Button>
-        </div>
-
-        {/* Monaco Editor */}
-        <div className="flex-1">
-          <Editor
-            height="100%"
-            language={files[activeFile].language}
-            value={files[activeFile].content}
-            path={activeFile}                    // ← This enables multi-file memory!
-            theme="vs-dark"
-            options={{
-              minimap: { enabled: false },
-              fontSize: 15,
-              lineNumbers: 'on',
-              scrollBeyondLastLine: false,
-            }}
+      <div className="flex flex-1 overflow-hidden">
+        {/* Left Sidebar */}
+        <div className="w-72 border-r border-[#1F1F1F] bg-[#111111] flex flex-col">
+          <FileTree 
+            files={files} 
+            activeFile={activeFile} 
+            onFileClick={handleFileClick} 
           />
-        </div>
-      </div>
 
-      {/* Right Sidebar (placeholder for future features) */}
-      <div className="w-80 border-l border-[#1F1F1F] bg-[#111111] p-4">
-        <Card className="bg-[#1F1F1F] p-4">
-          <h3 className="text-sm font-medium mb-3">Right Panel</h3>
-          <p className="text-xs text-gray-400">
-            This will later show Decision Memory, explanations, etc.
-          </p>
-        </Card>
+          <div className="mt-auto p-4 border-t border-[#1F1F1F]">
+            <Button 
+              onClick={handleIntentMode}
+              className="w-full bg-violet-600 hover:bg-violet-500 h-11 text-base"
+            >
+              🚀 Intent Mode
+            </Button>
+          </div>
+        </div>
+
+        {/* Main Editor Area */}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <EditorTabs 
+            files={files} 
+            activeFile={activeFile} 
+            onTabClick={handleTabClick} 
+          />
+          <MonacoEditor 
+            activeFile={activeFile} 
+            files={files} 
+            onChange={handleEditorChange} 
+          />
+
+          {/* Console Output */}
+          {isConsoleOpen && (
+            <div className="h-64 border-t border-[#1F1F1F] bg-[#0A0A0A] p-4 font-mono text-sm overflow-auto">
+              <div className="flex justify-between mb-2 text-gray-400 text-xs">
+                <span>CONSOLE OUTPUT</span>
+                <button 
+                  onClick={() => setIsConsoleOpen(false)} 
+                  className="hover:text-white"
+                >
+                  ✕ Close
+                </button>
+              </div>
+              {consoleOutput.map((line, i) => (
+                <div key={i} className="text-emerald-400 mb-1">{line}</div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Right Sidebar */}
+        <div className="w-80 border-l border-[#1F1F1F] bg-[#111111] p-4 overflow-auto">
+          <div className="bg-[#1F1F1F] border border-[#333] rounded-lg p-5">
+            <h3 className="font-medium mb-3">Right Panel</h3>
+            <p className="text-sm text-gray-400">
+              This will later show Decision Memory, explanations, and AI results.
+            </p>
+          </div>
+        </div>
       </div>
     </div>
-  )
+  );
 }
